@@ -2,6 +2,7 @@
   "files.associations": {
     "usb.h": "c",
     "wiring_time.h": "c",
-    "algorithm": "cpp"
+    "algorithm": "cpp",
+    "compare": "cpp"
   }
 }

@@ -24,8 +24,6 @@ BatteryCellController::BatteryCellController(SPIClass *spi, bcc_device_t device,
 }
 
 BatteryCellController::BatteryCellController(HalfDuplexSPI *bcc_tx, HalfDuplexSPI *bcc_rx, bcc_device_t devices[], uint8_t device_count, uint8_t cell_count, uint8_t enable_pin, uint8_t intb_pin, uint8_t cs_tx_pin, bool loopback) {
-  
-
   this->bcc_tx = bcc_tx;
   this->bcc_rx = bcc_rx;
 
@@ -190,7 +188,7 @@ bcc_status_t BatteryCellController::software_reset(bcc_cid_t cid) {
   }
 
   if (cid == BCC_CID_UNASSIG) {
-    return write_global(MC33771C_INIT_OFFSET, MC33771C_SYS_CFG1_SOFT_RST(MC33771C_SYS_CFG1_SOFT_RST_ACTIVE_ENUM_VAL));
+    return write_register_global(MC33771C_INIT_OFFSET, MC33771C_SYS_CFG1_SOFT_RST(MC33771C_SYS_CFG1_SOFT_RST_ACTIVE_ENUM_VAL));
   }
   else {
     return write_register(cid, MC33771C_INIT_OFFSET, MC33771C_SYS_CFG1_SOFT_RST(MC33771C_SYS_CFG1_SOFT_RST_ACTIVE_ENUM_VAL));
@@ -335,12 +333,34 @@ bcc_status_t BatteryCellController::write_register(bcc_cid_t cid, uint8_t reg_ad
   return status;
 }
 
-bcc_status_t BatteryCellController::write_global(uint8_t reg_addr, uint16_t reg_val) {
+bcc_status_t BatteryCellController::write_register_global(uint8_t reg_addr, uint16_t reg_val) {
   bcc_status_t status;
 
   assert_param(comm_mode == BCC_MODE_TPL);
 
   return write_global_tpl(reg_addr, reg_val);
+}
+
+bcc_status_t BatteryCellController::update_register(bcc_cid_t cid, uint8_t reg_addr, uint16_t mask, uint16_t val) {
+  uint16_t temp_reg_value;
+  bcc_status_t status;
+
+  if (((uint8_t)cid) > device_count)
+  {
+    return BCC_STATUS_PARAM_RANGE;
+  }
+
+  status = read_register(cid, reg_addr, 1U, &temp_reg_value);
+  if (status != BCC_STATUS_SUCCESS)
+  {
+    return status;
+  }
+
+  /* Update register value. */
+  temp_reg_value = temp_reg_value & ~(mask);
+  temp_reg_value = temp_reg_value | (val & mask);
+
+  return write_register(cid, reg_addr, temp_reg_value);
 }
 
 void BatteryCellController::pack_frame(uint16_t data, uint8_t addr, bcc_cid_t cid, uint8_t cmd_count, uint8_t *frame) {
@@ -720,3 +740,239 @@ bcc_status_t BatteryCellController::transfer_tpl(uint8_t tx[], uint8_t rx[], uin
 
   return BCC_STATUS_SUCCESS;
 }
+
+bcc_status_t BatteryCellController::send_nop_tpl(bcc_cid_t cid) {
+  uint8_t txBuf[BCC_MSG_SIZE]; /* Transmission buffer. */
+  bcc_status_t status;
+
+  if ((cid == BCC_CID_UNASSIG) || ((uint8_t)cid > device_count))
+  {
+    return BCC_STATUS_PARAM_RANGE;
+  }
+
+  /* Create frame for writing.
+  * Note: Register Data, Register Address and Message counter fields can
+  * contain any value. */
+  pack_frame(0x0000U, 0x00U, cid, BCC_CMD_NOOP, txBuf);
+
+  status = transfer_tpl(txBuf, rx_buffer, 1);
+  if (status != BCC_STATUS_SUCCESS)
+  {
+      return status;
+  }
+
+  /* Check the echo frame. */
+  return check_echo_frame(txBuf, rx_buffer);
+}
+
+bcc_status_t BatteryCellController::send_nop_spi(bcc_cid_t cid) {
+  uint8_t tx[BCC_MSG_SIZE]; /* Transmission buffer. */
+  uint8_t rx[BCC_MSG_SIZE]; /* Buffer for receiving. */
+  bcc_status_t status;
+
+  if ((cid == BCC_CID_UNASSIG) || ((uint8_t)cid > device_count))
+  {
+    return BCC_STATUS_PARAM_RANGE;
+  }
+
+  /* Create frame for writing.
+  * Note: Register Data, Register Address and Message counter fields can
+  * contain any value. */
+  pack_frame(0x0000U, 0x00U, cid, BCC_CMD_NOOP, tx);
+
+  status = transfer_spi(tx, rx);
+  if (status != BCC_STATUS_SUCCESS)
+  {
+      return status;
+  }
+
+  /* Check CRC. */
+  if ((status = check_crc(rx)) != BCC_STATUS_SUCCESS)
+  {
+    return status;
+  }
+
+  /* Check message counter. */
+  if ((status = check_message_counter(cid, rx)) != BCC_STATUS_SUCCESS)
+  {
+    return status;
+  }
+
+  /* Check whether all field except CRC and message counter are zero. */
+  if (BCC_IS_NULL_RESP(rx))
+  {
+    return BCC_STATUS_COM_NULL;
+  }
+
+  return BCC_STATUS_SUCCESS;
+}
+
+bcc_status_t BatteryCellController::send_nop(bcc_cid_t cid) {
+  uint8_t tx_buffer[BCC_MSG_SIZE];
+  uint8_t rx_buffer[BCC_MSG_SIZE];
+  bcc_status_t status;
+  
+
+  return BCC_STATUS_SUCCESS;
+}
+
+bcc_status_t BatteryCellController::sleep() {
+  if (comm_mode == BCC_MODE_SPI) {
+    return write_register(BCC_CID_DEV1, MC33771C_SYS_CFG_GLOBAL_OFFSET,
+      MC33771C_SYS_CFG_GLOBAL_GO2SLEEP(MC33771C_SYS_CFG_GLOBAL_GO2SLEEP_ENABLED_ENUM_VAL));
+  }
+  else {
+    return write_register_global(MC33771C_SYS_CFG_GLOBAL_OFFSET,
+      MC33771C_SYS_CFG_GLOBAL_GO2SLEEP(MC33771C_SYS_CFG_GLOBAL_GO2SLEEP_ENABLED_ENUM_VAL));
+  }
+}
+
+bcc_status_t BatteryCellController::start_conversion_async(bcc_cid_t cid, bcc_avg_t average) {
+  if ((cid == BCC_CID_UNASSIG) || (((uint8_t)cid) > device_count) || (average > BCC_AVG_256))
+  {
+    return BCC_STATUS_PARAM_RANGE;
+  }
+
+  return update_register(cid, MC33771C_ADC_CFG_OFFSET,
+    MC33771C_ADC_CFG_SOC_MASK | MC33771C_ADC_CFG_AVG_MASK,
+    MC33771C_ADC_CFG_SOC(MC33771C_ADC_CFG_SOC_ENABLED_ENUM_VAL) |
+    MC33771C_ADC_CFG_AVG(average));
+}
+
+bcc_status_t BatteryCellController::start_conversion_global_async(uint16_t adc_config_value) {
+  assert_param(comm_mode == BCC_MODE_TPL);
+
+  /* Set Start of Conversion bit in case it is not. */
+  adc_config_value |= MC33771C_ADC_CFG_SOC(MC33771C_ADC_CFG_SOC_ENABLED_ENUM_VAL);
+
+  return write_register_global(MC33771C_ADC_CFG_OFFSET, adc_config_value);
+}
+
+bcc_status_t BatteryCellController::check_conversion_completed(bcc_cid_t cid, bool *completed) {
+  uint16_t adc_config_value;
+  bcc_status_t status;
+
+  assert_param(completed != NULL);
+
+  if ((cid == BCC_CID_UNASSIG) || (((uint8_t)cid) > device_count))
+  {
+    return BCC_STATUS_PARAM_RANGE;
+  }
+
+  status = read_register(cid, MC33771C_ADC_CFG_OFFSET, 1U, &adc_config_value);
+
+  *(completed) = ((adc_config_value & MC33771C_ADC_CFG_EOC_N_MASK) ==
+          MC33771C_ADC_CFG_EOC_N(MC33771C_ADC_CFG_EOC_N_COMPLETED_ENUM_VAL));
+
+  return status;
+}
+
+bcc_status_t BatteryCellController::start_conversion(bcc_cid_t cid, bcc_avg_t average) {
+  bool complete;           /* Conversion complete flag. */
+  bcc_status_t status;
+
+  if ((cid == BCC_CID_UNASSIG) || (((uint8_t)cid) > device_count) || (average > BCC_AVG_256))
+  {
+    return BCC_STATUS_PARAM_RANGE;
+  }
+
+  status = start_conversion_async(cid, average);
+  if (status != BCC_STATUS_SUCCESS)
+  {
+      return status;
+  }
+
+  /* Wait for at least 520 us (16-bit conversion) before polling bit EOC_N
+    * to avoid any traffic on the communication bus during conversion. */
+  delayMicroseconds(((uint32_t)BCC_T_EOC_TYP_US) << ((uint8_t)average));
+
+  status = start_timeout(
+    (((uint32_t)BCC_T_EOC_TIMEOUT_US) << ((uint8_t)average)) -
+    (((uint32_t)BCC_T_EOC_TYP_US) << ((uint8_t)average)));
+  if (status != BCC_STATUS_SUCCESS)
+  {
+    return status;
+  }
+
+  do
+  {
+    status = check_conversion_completed(cid, &complete);
+    if (status != BCC_STATUS_SUCCESS)
+    {
+      return status;
+    }
+  } while ((!complete) && (!has_timer_expired()));
+
+  /* Check once more after timeout expiration because the read command takes
+    * several tens/hundreds of microseconds (depends on user code efficiency)
+    * and the last read command could be done relatively long before the
+    * timeout expiration. */
+  if (!complete)
+  {
+    status = check_conversion_completed(cid, &complete);
+    if (status != BCC_STATUS_SUCCESS)
+    {
+      return status;
+    }
+  }
+
+  return (complete) ? BCC_STATUS_SUCCESS : BCC_STATUS_COM_TIMEOUT;
+}
+
+bcc_status_t BatteryCellController::get_raw_values(bcc_cid_t cid, uint16_t *measurements) {
+  bcc_status_t status;
+  uint8_t i;
+
+  assert_param(measurements != NULL);
+
+  if ((cid == BCC_CID_UNASSIG) || (((uint8_t)cid) > device_count))
+  {
+    return BCC_STATUS_PARAM_RANGE;
+  }
+
+  /* Read all the measurement registers.
+    * Note: the order and number of registers conforms to the order of measured
+    * values in Measurements array, see enumeration bcc_measurements_t. */
+  if (devices[(uint8_t)cid - 1] == BCC_DEVICE_MC33771C)
+  {
+    status = read_register(cid, MC33771C_CC_NB_SAMPLES_OFFSET,
+      BCC_MEAS_CNT, measurements);
+  }
+  else
+  {
+    status = read_register(cid, MC33772C_CC_NB_SAMPLES_OFFSET,
+      (MC33772C_MEAS_STACK_OFFSET - MC33772C_CC_NB_SAMPLES_OFFSET) + 1, measurements);
+    if (status != BCC_STATUS_SUCCESS)
+    {
+      return status;
+    }
+
+    /* Skip the reserved registers to speed-up this function. */
+    measurements[BCC_MSR_CELL_VOLT14] = 0x0000;
+    measurements[BCC_MSR_CELL_VOLT13] = 0x0000;
+    measurements[BCC_MSR_CELL_VOLT12] = 0x0000;
+    measurements[BCC_MSR_CELL_VOLT11] = 0x0000;
+    measurements[BCC_MSR_CELL_VOLT10] = 0x0000;
+    measurements[BCC_MSR_CELL_VOLT9] = 0x0000;
+    measurements[BCC_MSR_CELL_VOLT8] = 0x0000;
+    measurements[BCC_MSR_CELL_VOLT7] = 0x0000;
+
+    status = read_register(cid, MC33772C_MEAS_CELL6_OFFSET,
+      (MC33772C_MEAS_VBG_DIAG_ADC1B_OFFSET - MC33772C_MEAS_CELL6_OFFSET) + 1,
+      (uint16_t *)(measurements + ((uint8_t)BCC_MSR_CELL_VOLT6)));
+  }
+
+  /* Mask the read registers.
+    * Note: Nothing to mask in CC_NB_SAMPLES, COULOMB_CNT1 and COULOMB_CNT2
+    * registers. */
+  measurements[BCC_MSR_ISENSE1] &= MC33771C_MEAS_ISENSE1_MEAS_I_MSB_MASK;
+  measurements[BCC_MSR_ISENSE2] &= MC33771C_MEAS_ISENSE2_MEAS_I_LSB_MASK;
+
+  for (i = (uint8_t)BCC_MSR_STACK_VOLT; i < BCC_MEAS_CNT; i++)
+  {
+    measurements[i] &= MC33771C_MEAS_STACK_MEAS_STACK_MASK;
+  }
+
+  return status;
+}
+
