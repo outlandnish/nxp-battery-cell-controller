@@ -248,15 +248,15 @@ spi_init_e spi_init_custom(spi_t *obj, uint32_t speed, SPIMode mode, uint8_t msb
 #endif
 
   // Configure the SPI pins
-  if (obj->pin_ssel != NC) {
-    if (obj->mode == SPI_MODE_SLAVE) {
-      handle->Init.NSS = SPI_NSS_HARD_INPUT;
-    } else {
-      handle->Init.NSS = SPI_NSS_HARD_OUTPUT;
-   }
-  } else {
+  // if (obj->pin_ssel != NC) {
+  //   if (obj->mode == SPI_MODE_SLAVE) {
+  //     handle->Init.NSS = SPI_NSS_HARD_INPUT;
+  //   } else {
+  //     handle->Init.NSS = SPI_NSS_HARD_OUTPUT;
+  //  }
+  // } else {
     handle->Init.NSS = SPI_NSS_SOFT;
-  }
+  // }
 
   /* Fill default value */
   handle->Instance               = obj->spi;
