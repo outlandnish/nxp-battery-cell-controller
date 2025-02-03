@@ -80,6 +80,7 @@ class BatteryCellController {
     bcc_status_t get_raw_values(bcc_cid_t cid, uint16_t *measurements);
 
     // system measurements
+    bcc_status_t get_coulomb_counter(bcc_cid_t cid, bcc_cc_data_t* coulomb_counter);
     bcc_status_t get_current_sense_voltage(bcc_cid_t cid, int32_t *current_sense_voltage);
     bcc_status_t get_stack_voltage(bcc_cid_t cid, uint32_t *stack_voltage);
 
@@ -107,7 +108,7 @@ class BatteryCellController {
     // cell balancing
     bcc_status_t enable_cell_balancing(bcc_cid_t cid, bool enable);
     bcc_status_t set_cell_balancing(bcc_cid_t cid, uint8_t cell_index, bool enable, uint16_t timer);
-    bcc_status_t pause_celL_balancing(bcc_cid_t cid, bool pause);
+    bcc_status_t pause_cell_balancing(bcc_cid_t cid, bool pause);
 
     // fuse mirror
     bcc_status_t read_fuse_mirror(bcc_cid_t cid, uint8_t fuse_addr, uint16_t *value);
@@ -116,6 +117,6 @@ class BatteryCellController {
     bcc_status_t read_guid(bcc_cid_t cid, uint64_t *guid);
 
     // EEPROM
-    bcc_status_t read_eeprom(bcc_cid_t cid, uint8_t addr, uint8_t *data, uint8_t len);
-    bcc_status_t write_eeprom(bcc_cid_t cid, uint8_t addr, uint8_t *data, uint8_t len);
+    bcc_status_t read_eeprom(bcc_cid_t cid, uint8_t address, uint8_t *data);
+    bcc_status_t write_eeprom(bcc_cid_t cid, uint8_t address, uint8_t data);
 };
