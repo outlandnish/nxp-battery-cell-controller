@@ -976,64 +976,6 @@ bcc_status_t BatteryCellController::get_raw_values(bcc_cid_t cid, uint16_t *meas
   return status;
 }
 
-bcc_status_t BatteryCellController::get_raw_values(bcc_cid_t cid, uint16_t *measurements) {
-  bcc_status_t status;
-
-  uint8_t i;
-
-  assert_param(measurements != NULL);
-
-  if ((cid == BCC_CID_UNASSIG) || (((uint8_t)cid) > device_count))
-  {
-    return BCC_STATUS_PARAM_RANGE;
-  }
-
-  /* Read all the measurement registers.
-    * Note: the order and number of registers conforms to the order of measured
-    * values in Measurements array, see enumeration bcc_measurements_t. */
-  if (devices[(uint8_t)cid - 1] == BCC_DEVICE_MC33771C)
-  {
-    status = read_register(cid, MC33771C_CC_NB_SAMPLES_OFFSET,
-      BCC_MEAS_CNT, measurements);
-  }
-  else
-  {
-    status = read_register(cid, MC33772C_CC_NB_SAMPLES_OFFSET,
-      (MC33772C_MEAS_STACK_OFFSET - MC33772C_CC_NB_SAMPLES_OFFSET) + 1, measurements);
-    if (status != BCC_STATUS_SUCCESS)
-    {
-      return status;
-    }
-
-    /* Skip the reserved registers to speed-up this function. */
-    measurements[BCC_MSR_CELL_VOLT14] = 0x0000;
-    measurements[BCC_MSR_CELL_VOLT13] = 0x0000;
-    measurements[BCC_MSR_CELL_VOLT12] = 0x0000;
-    measurements[BCC_MSR_CELL_VOLT11] = 0x0000;
-    measurements[BCC_MSR_CELL_VOLT10] = 0x0000;
-    measurements[BCC_MSR_CELL_VOLT9] = 0x0000;
-    measurements[BCC_MSR_CELL_VOLT8] = 0x0000;
-    measurements[BCC_MSR_CELL_VOLT7] = 0x0000;
-
-    status = read_register(cid, MC33772C_MEAS_CELL6_OFFSET,
-      (MC33772C_MEAS_VBG_DIAG_ADC1B_OFFSET - MC33772C_MEAS_CELL6_OFFSET) + 1,
-      (uint16_t *)(measurements + ((uint8_t)BCC_MSR_CELL_VOLT6)));
-  }
-
-  /* Mask the read registers.
-    * Note: Nothing to mask in CC_NB_SAMPLES, COULOMB_CNT1 and COULOMB_CNT2
-    * registers. */
-  measurements[BCC_MSR_ISENSE1] &= MC33771C_MEAS_ISENSE1_MEAS_I_MSB_MASK;
-  measurements[BCC_MSR_ISENSE2] &= MC33771C_MEAS_ISENSE2_MEAS_I_LSB_MASK;
-
-  for (i = (uint8_t)BCC_MSR_STACK_VOLT; i < BCC_MEAS_CNT; i++)
-  {
-    measurements[i] &= MC33771C_MEAS_STACK_MEAS_STACK_MASK;
-  }
-
-  return status;
-}
-
 bcc_status_t BatteryCellController::get_coulomb_counter(bcc_cid_t cid, bcc_cc_data_t* coulomb_counter) {
   bcc_status_t status;
   uint16_t readVal[3];
